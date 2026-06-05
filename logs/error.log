@@ -1,0 +1,30 @@
+[16:07:25] [31merror[39m: 401 — Not authenticated. Please log in. — /api/v1/bills?page=1&limit=15
+[16:07:46] [31merror[39m: 401 — Not authenticated. Please log in. — /api/v1/bills?page=1&limit=15
+[16:08:23] [31merror[39m: 401 — Not authenticated. Please log in. — /api/v1/products?page=1&limit=10
+[16:12:01] [31merror[39m: 401 — Not authenticated. Please log in. — /api/v1/bills?page=1&limit=15
+[16:12:03] [31merror[39m: 401 — Not authenticated. Please log in. — /api/v1/bills?page=1&limit=15
+[16:14:27] [31merror[39m: 401 — Not authenticated. Please log in. — /api/v1/bills?page=1&limit=15
+[16:14:58] [31merror[39m: 401 — Not authenticated. Please log in. — /api/v1/products?page=1&limit=10
+[16:15:30] [31merror[39m: 401 — Not authenticated. Please log in. — /api/v1/products?page=1&limit=10
+[16:16:46] [31merror[39m: 401 — Not authenticated. Please log in. — /api/v1/products?page=1&limit=10
+[16:21:49] [31merror[39m: 500 — Cannot read properties of undefined (reading '_id') — /api/v1/bills
+[16:23:01] [31merror[39m: 500 — Cannot read properties of undefined (reading '_id') — /api/v1/bills
+[17:21:06] [31merror[39m: 401 — Invalid email or password — /api/v1/auth/login
+[17:31:35] [31merror[39m: 401 — Invalid email or password — /api/v1/auth/login
+[17:32:01] [31merror[39m: 401 — Invalid email or password — /api/v1/auth/login
+[17:33:56] [31merror[39m: 401 — Invalid email or password — /api/v1/auth/login
+[17:34:12] [31merror[39m: 401 — Invalid email or password — /api/v1/auth/login
+[13:30:51] [31merror[39m: 400 — Invalid _id: undefined — /api/v1/products/undefined
+[13:30:53] [31merror[39m: 400 — Invalid _id: undefined — /api/v1/products/undefined
+[13:30:56] [31merror[39m: 400 — Invalid _id: undefined — /api/v1/products/undefined
+[13:31:07] [31merror[39m: 400 — Invalid _id: undefined — /api/v1/products/undefined
+[13:31:19] [31merror[39m: 400 — Invalid _id: undefined — /api/v1/products/undefined
+[14:14:14] [31merror[39m: 400 — Unexpected token '-', "------WebK"... is not valid JSON — /api/v1/products/bulk-upload
+[14:16:56] [31merror[39m: 400 — Unexpected token '-', "------WebK"... is not valid JSON — /api/v1/products/bulk-upload
+[14:19:30] [31merror[39m: 400 — Unexpected token '-', "------WebK"... is not valid JSON — /api/v1/products/bulk-upload
+[09:51:04] [31merror[39m: 500 — Only CSV and Excel files are allowed — /api/v1/products/bulk-upload
+[09:51:27] [31merror[39m: 500 — Only CSV and Excel files are allowed — /api/v1/products/bulk-upload
+[13:41:14] [31merror[39m: 400 — Paid amount cannot exceed grand total — /api/v1/bills
+[12:59:50] [31merror[39m: 422 — Customer name required — /api/v1/bills
+[13:00:19] [31merror[39m: 422 — Customer name required — /api/v1/bills
+[13:02:30] [31merror[39m: 422 — Customer name required — /api/v1/bills

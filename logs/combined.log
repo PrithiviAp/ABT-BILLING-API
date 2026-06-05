@@ -1,0 +1,104 @@
+[15:43:16] [32minfo[39m: ✅ MongoDB connected: localhost
+[15:43:16] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[15:45:26] [32minfo[39m: ✅ MongoDB connected: localhost
+[15:45:26] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[16:07:25] [31merror[39m: 401 — Not authenticated. Please log in. — /api/v1/bills?page=1&limit=15
+[16:07:46] [31merror[39m: 401 — Not authenticated. Please log in. — /api/v1/bills?page=1&limit=15
+[16:08:23] [31merror[39m: 401 — Not authenticated. Please log in. — /api/v1/products?page=1&limit=10
+[16:12:01] [31merror[39m: 401 — Not authenticated. Please log in. — /api/v1/bills?page=1&limit=15
+[16:12:03] [31merror[39m: 401 — Not authenticated. Please log in. — /api/v1/bills?page=1&limit=15
+[16:14:27] [31merror[39m: 401 — Not authenticated. Please log in. — /api/v1/bills?page=1&limit=15
+[16:14:58] [31merror[39m: 401 — Not authenticated. Please log in. — /api/v1/products?page=1&limit=10
+[16:15:30] [31merror[39m: 401 — Not authenticated. Please log in. — /api/v1/products?page=1&limit=10
+[16:16:46] [31merror[39m: 401 — Not authenticated. Please log in. — /api/v1/products?page=1&limit=10
+[16:18:57] [32minfo[39m: ✅ MongoDB connected: localhost
+[16:18:57] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[16:21:49] [31merror[39m: 500 — Cannot read properties of undefined (reading '_id') — /api/v1/bills
+[16:22:55] [32minfo[39m: ✅ MongoDB connected: localhost
+[16:22:55] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[16:23:01] [31merror[39m: 500 — Cannot read properties of undefined (reading '_id') — /api/v1/bills
+[16:23:20] [32minfo[39m: ✅ MongoDB connected: localhost
+[16:23:20] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[17:11:54] [32minfo[39m: ✅ MongoDB connected: localhost
+[17:11:54] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[17:21:06] [31merror[39m: 401 — Invalid email or password — /api/v1/auth/login
+[17:31:35] [31merror[39m: 401 — Invalid email or password — /api/v1/auth/login
+[17:32:01] [31merror[39m: 401 — Invalid email or password — /api/v1/auth/login
+[17:33:56] [31merror[39m: 401 — Invalid email or password — /api/v1/auth/login
+[17:34:12] [31merror[39m: 401 — Invalid email or password — /api/v1/auth/login
+[07:19:47] [32minfo[39m: ✅ MongoDB connected: localhost
+[07:19:49] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[07:25:47] [32minfo[39m: ✅ MongoDB connected: localhost
+[07:25:48] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[10:44:41] [32minfo[39m: ✅ MongoDB connected: localhost
+[10:44:42] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[13:30:51] [31merror[39m: 400 — Invalid _id: undefined — /api/v1/products/undefined
+[13:30:53] [31merror[39m: 400 — Invalid _id: undefined — /api/v1/products/undefined
+[13:30:56] [31merror[39m: 400 — Invalid _id: undefined — /api/v1/products/undefined
+[13:31:07] [31merror[39m: 400 — Invalid _id: undefined — /api/v1/products/undefined
+[13:31:19] [31merror[39m: 400 — Invalid _id: undefined — /api/v1/products/undefined
+[14:13:29] [32minfo[39m: ✅ MongoDB connected: localhost
+[14:13:29] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[14:14:14] [31merror[39m: 400 — Unexpected token '-', "------WebK"... is not valid JSON — /api/v1/products/bulk-upload
+[14:16:37] [32minfo[39m: ✅ MongoDB connected: localhost
+[14:16:37] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[14:16:56] [31merror[39m: 400 — Unexpected token '-', "------WebK"... is not valid JSON — /api/v1/products/bulk-upload
+[14:19:09] [32minfo[39m: ✅ MongoDB connected: localhost
+[14:19:09] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[14:19:30] [31merror[39m: 400 — Unexpected token '-', "------WebK"... is not valid JSON — /api/v1/products/bulk-upload
+[09:51:04] [31merror[39m: 500 — Only CSV and Excel files are allowed — /api/v1/products/bulk-upload
+[09:51:27] [31merror[39m: 500 — Only CSV and Excel files are allowed — /api/v1/products/bulk-upload
+[09:57:04] [32minfo[39m: ✅ MongoDB connected: localhost
+[09:57:04] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[10:17:45] [32minfo[39m: ✅ MongoDB connected: localhost
+[10:17:45] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[10:47:40] [32minfo[39m: ✅ MongoDB connected: localhost
+[10:47:40] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[10:51:47] [32minfo[39m: ✅ MongoDB connected: localhost
+[10:51:47] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[10:58:20] [32minfo[39m: ✅ MongoDB connected: localhost
+[10:58:20] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[11:01:36] [32minfo[39m: ✅ MongoDB connected: localhost
+[11:01:36] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[11:04:31] [32minfo[39m: ✅ MongoDB connected: localhost
+[11:04:31] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[12:43:24] [32minfo[39m: ✅ MongoDB connected: localhost
+[12:43:24] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[13:16:33] [32minfo[39m: ✅ MongoDB connected: localhost
+[13:16:33] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[13:37:38] [32minfo[39m: ✅ MongoDB connected: localhost
+[13:37:38] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[13:41:14] [31merror[39m: 400 — Paid amount cannot exceed grand total — /api/v1/bills
+[13:43:25] [32minfo[39m: ✅ MongoDB connected: localhost
+[13:43:25] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[14:12:11] [32minfo[39m: ✅ MongoDB connected: localhost
+[14:12:11] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[14:32:20] [32minfo[39m: ✅ MongoDB connected: localhost
+[14:32:20] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[14:39:09] [32minfo[39m: ✅ MongoDB connected: localhost
+[14:39:09] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[14:39:48] [32minfo[39m: ✅ MongoDB connected: localhost
+[14:39:48] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[16:08:22] [32minfo[39m: ✅ MongoDB connected: localhost
+[16:08:22] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[16:16:16] [32minfo[39m: ✅ MongoDB connected: localhost
+[16:16:16] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[11:29:56] [32minfo[39m: ✅ MongoDB connected: localhost
+[11:29:56] [32minfo[39m: 🚀 ABT API running on port 3500 [development]
+[11:30:39] [32minfo[39m: ✅ MongoDB connected: localhost
+[11:30:39] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[11:36:36] [32minfo[39m: ✅ MongoDB connected: localhost
+[11:36:36] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[11:39:08] [32minfo[39m: ✅ MongoDB connected: localhost
+[11:39:08] [32minfo[39m: 🚀 ABT API running on port 3500 [development]
+[11:40:06] [32minfo[39m: ✅ MongoDB connected: localhost
+[11:40:06] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[12:26:28] [32minfo[39m: ✅ MongoDB connected: localhost
+[12:26:28] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[12:59:50] [31merror[39m: 422 — Customer name required — /api/v1/bills
+[13:00:19] [31merror[39m: 422 — Customer name required — /api/v1/bills
+[13:02:07] [32minfo[39m: ✅ MongoDB connected: localhost
+[13:02:07] [32minfo[39m: 🚀 ABT API running on port 5000 [development]
+[13:02:30] [31merror[39m: 422 — Customer name required — /api/v1/bills
+[13:03:25] [32minfo[39m: ✅ MongoDB connected: localhost
+[13:03:25] [32minfo[39m: 🚀 ABT API running on port 5000 [development]

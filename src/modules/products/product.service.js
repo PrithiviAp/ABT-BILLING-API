@@ -1,21 +1,166 @@
 import { AppError } from '../../utils/appError.js';
 import Product from './product.model.js';
+import { computeProductAmounts, computeTaxableAmount } from '../../utils/product.util.js';
 
-export const getAllProducts = async ({ search, page = 1, limit = 50, active = true }) => {
-  const query = { isActive: active };
 
-  if (search) {
-    query.$or = [
-      { name:    { $regex: search, $options: 'i' } },
-      { hsnCode: { $regex: search, $options: 'i' } },
-    ];
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+export const bulkDeleteProducts = async (ids) => {
+  const result = await Product.updateMany(
+    { _id: { $in: ids } },
+    { isActive: false }
+  );
+  if (!result.modifiedCount) throw new AppError('No products found', 404);
+  return { deleted: result.modifiedCount };
+};
+
+export const createProduct = async (data) => {
+  const name = String(data.name || '').trim().toUpperCase();
+  const isGstApplicable = data.isGstApplicable ?? true;
+
+  const computed = computeProductAmounts({
+    rate:             data.rate,
+    stock:            data.stock,
+    discPercent:      data.discPercent ?? 0,
+    isGstApplicable,
+    gstPercent:       data.gstPercent,
+    sellingRate:      data.sellingRate,
+  });
+
+  const existing = await Product.findOne({
+    name: { $regex: `^${escapeRegex(name)}$`, $options: 'i' },
+  });
+
+  if (existing) {
+    Object.assign(existing, {
+      unit:     data.unit,
+      rate:     data.rate,     // ← was missing
+      stock:    data.stock,    // ← was missing
+      isActive: true,
+      isGstApplicable,
+      ...computed,
+    });
+    await existing.save();
+    return existing;
   }
 
-  const skip  = (page - 1) * limit;
-  const total = await Product.countDocuments(query);
-  const data  = await Product.find(query).sort({ name: 1 }).skip(skip).limit(+limit);
+  return Product.create({
+    ...data,
+    name,
+    isGstApplicable,
+    ...computed,
+  });
+};
+export const updateProduct = async (id, data) => {
+  if (data.name) {
+    const name = String(data.name).trim().toUpperCase();
+    const clash = await Product.findOne({
+      name: { $regex: `^${escapeRegex(name)}$`, $options: 'i' },
+      _id:  { $ne: id },
+    });
+    if (clash) throw new AppError(`Product "${name}" already exists`, 409);
+    data = { ...data, name };
+  }
 
-  return { data, pagination: { total, page: +page, limit: +limit, pages: Math.ceil(total / limit) } };
+// updateProduct — also add discPercent to the recompute trigger list
+const shouldRecompute = ['rate', 'stock', 'isGstApplicable', 'gstPercent', 'sellingRate', 'discPercent']
+  .some(f => data[f] !== undefined);
+
+if (shouldRecompute) {
+  const current = await Product.findById(id);
+  if (!current) throw new AppError('Product not found', 404);
+
+  const isGstApplicable = data.isGstApplicable ?? current.isGstApplicable;
+
+  const computed = computeProductAmounts({
+    rate:             data.rate             ?? current.rate,
+    stock:            data.stock             ?? current.stock,
+    discPercent:      data.discPercent       ?? current.discPercent,
+    isGstApplicable,
+    gstPercent:       data.gstPercent        ?? current.gstPercent,
+    sellingRate:      data.sellingRate       ?? current.sellingRate,
+  });
+
+  data = { ...data, isGstApplicable, ...computed };
+}
+
+  const product = await Product.findByIdAndUpdate(id, data, { new: true, runValidators: true });
+  if (!product) throw new AppError('Product not found', 404);
+  return product;
+};
+
+export const bulkCreateProducts = async (rows) => {
+  const results = { created: 0, updated: 0, skipped: 0, errors: [] };
+
+  const docs = rows
+    .map(({ _row, ...data }) => {
+      const isGstApplicable = data.isGstApplicable ?? (parseFloat(data.gstPercent) > 0);
+      const rate  = parseFloat(data.rate) || 0;
+      const stock = Math.round(parseFloat(data.stock) || 0);
+
+      const computed = computeProductAmounts({
+        rate,
+        stock,
+        discPercent:      parseFloat(data.discPercent) || 0,
+        isGstApplicable,
+        gstPercent:       parseFloat(data.gstPercent) || 18,
+        sellingRate:      parseFloat(data.sellingRate) || 0,
+      });
+
+      return {
+        name: String(data.name || '').trim().toUpperCase(),
+        unit: data.unit || 'Nos',
+        rate,
+        stock,
+        isGstApplicable,
+        isActive: true,
+        ...computed,
+      };
+    })
+    .filter(d => d.name && d.rate > 0);
+
+  if (!docs.length) return results;
+
+  const bulkOps = docs.map(doc => ({
+    updateOne: {
+      filter: { name: { $regex: `^${escapeRegex(doc.name)}$`, $options: 'i' } },
+      update: { $set: doc },
+      upsert: true,
+    },
+  }));
+
+  try {
+    const res = await Product.bulkWrite(bulkOps, { ordered: false });
+    results.created = res.upsertedCount ?? 0;
+    results.updated = res.modifiedCount ?? 0;
+  } catch (err) {
+    results.created = err.result?.upsertedCount ?? 0;
+    results.updated = err.result?.modifiedCount ?? 0;
+    (err.writeErrors || []).forEach(e => {
+      results.errors.push({ name: e.err?.op?.q?.name ?? '?', reason: e.errmsg || 'Update failed' });
+      results.skipped++;
+    });
+  }
+
+  return results;
+};
+
+// ── unchanged below ───────────────────────────────────────────
+export const getAllProducts = async ({ search, page = 1, limit = 10, active = 'true' }) => {
+  const query = { isActive: active !== 'false' };
+
+  if (search) {
+    query.$or = [{ name: { $regex: search, $options: 'i' } }];
+  }
+
+  const p     = Math.max(1, parseInt(page));
+  const l     = Math.max(1, parseInt(limit));
+  const skip  = (p - 1) * l;
+  console.log('paru query', query);
+  const total = await Product.countDocuments(query);
+  const data  = await Product.find(query).sort({ name: 1 }).skip(skip).limit(l);
+
+  return { data, pagination: { total, page: p, limit: l, pages: Math.ceil(total / l) } };
 };
 
 export const getProductById = async (id) => {
@@ -24,152 +169,19 @@ export const getProductById = async (id) => {
   return product;
 };
 
-export const createProduct = async (data) => {
-  const existing = await Product.findOne({ name: { $regex: `^${data.name}$`, $options: 'i' } });
-  if (existing) throw new AppError('Product with this name already exists', 409);
-  return Product.create(data);
-};
-
-export const updateProduct = async (id, data) => {
-  const product = await Product.findByIdAndUpdate(id, data, {
-    new: true, runValidators: true
-  });
-  if (!product) throw new AppError('Product not found', 404);
-  return product;
-};
-
 export const deleteProduct = async (id) => {
-  const product = await Product.findByIdAndUpdate(
-    id, { isActive: false }, { new: true }
-  );
+  const product = await Product.findByIdAndUpdate(id, { isActive: false }, { new: true });
   if (!product) throw new AppError('Product not found', 404);
   return product;
 };
 
 export const updateStock = async (id, qty, operation = 'set') => {
   const ops = {
-    set:       { stock: qty },
-    increment: { $inc: { stock: qty } },
+    set:       { $set: { stock: qty } },
+    increment: { $inc: { stock:  qty } },
     decrement: { $inc: { stock: -qty } },
   };
-  const update = operation === 'set' ? { $set: ops.set } : ops[operation];
-  const product = await Product.findByIdAndUpdate(id, update, { new: true });
+  const product = await Product.findByIdAndUpdate(id, ops[operation], { new: true });
   if (!product) throw new AppError('Product not found', 404);
   return product;
 };
-
-export const bulkCreateProducts = async (rows) => {
-  const results = { created: 0, skipped: 0, errors: [] };
-
-  for (const row of rows) {
-    // Strip internal _row field added during preview
-    const { _row, ...data } = row;
-    const name = String(data.name || '').trim().toUpperCase();
-
-    try {
-      if (!name || !data.hsnCode) {
-        results.errors.push({ name: name || '?', reason: 'Missing name or HSN code' });
-        results.skipped++;
-        continue;
-      }
-
-      if (!data.rate || data.rate <= 0) {
-        results.errors.push({ name, reason: 'Invalid rate' });
-        results.skipped++;
-        continue;
-      }
-
-      const existing = await Product.findOne({
-        name: { $regex: `^${name}$`, $options: 'i' }
-      });
-
-      if (existing) {
-        results.errors.push({ name, reason: 'Already exists' });
-        results.skipped++;
-        continue;
-      }
-
-      await Product.create({
-        name,
-        hsnCode:    String(data.hsnCode).trim(),
-        unit:       data.unit       || 'Nos',
-        rate:       parseFloat(data.rate),
-        gstPercent: parseFloat(data.gstPercent) || 18,
-        stock:      Math.round(parseFloat(data.stock) || 0),
-        isActive:   true,
-      });
-
-      results.created++;
-    } catch (err) {
-      results.errors.push({ name, reason: err.message });
-      results.skipped++;
-    }
-  }
-
-  return results;
-};
-// export const bulkCreateProducts = async (rows) => {
-//   const results = { created: 0, skipped: 0, errors: [] };
-
-//   for (const row of rows) {
-//     try {
-//       const name = String(row['particulars'] || row['Particulars'] || '').trim().toUpperCase();
-//       const hsnCode = String(row['hsn/sac'] || row['HSN/SAC'] || row['hsn'] || '').trim();
-//       const stock = parseFloat(row['qty'] || row['Qty'] || 0);
-//       const unit = String(row['per'] || row['Per'] || 'Nos').trim();
-//       const amount = parseFloat(row['amount'] || row['Amount'] || 0);
-//       const qty = parseFloat(row['qty'] || row['Qty'] || 1);
-
-//       if (!name || !hsnCode) {
-//         results.errors.push({ name, reason: 'Missing name or HSN code' });
-//         results.skipped++;
-//         continue;
-//       }
-
-//       // Selling price = final amount per piece
-//       const rate = qty > 0 ? +(amount / qty).toFixed(2) : 0;
-
-//       if (rate <= 0) {
-//         results.errors.push({ name, reason: 'Invalid rate computed' });
-//         results.skipped++;
-//         continue;
-//       }
-
-//       // Normalize unit to allowed enum
-//       const unitMap = {
-//         pcs: 'Pcs', nos: 'Nos', kg: 'Kg',
-//         mtr: 'Mtr', box: 'Box', roll: 'Roll',
-//         ltr: 'Ltr', set: 'Set', m: 'Mtr',
-//       };
-//       const normalizedUnit = unitMap[unit.toLowerCase()] || 'Nos';
-
-//       // Skip if already exists
-//       const existing = await Product.findOne({
-//         name: { $regex: `^${name}$`, $options: 'i' }
-//       });
-
-//       if (existing) {
-//         results.skipped++;
-//         results.errors.push({ name, reason: 'Already exists' });
-//         continue;
-//       }
-
-//       await Product.create({
-//         name,
-//         hsnCode,
-//         unit: normalizedUnit,
-//         rate,
-//         gstPercent: 18,   // default — can be updated later
-//         stock: Math.round(stock),
-//         isActive: true,
-//       });
-
-//       results.created++;
-//     } catch (err) {
-//       results.errors.push({ name: row['particulars'] || '?', reason: err.message });
-//       results.skipped++;
-//     }
-//   }
-
-//   return results;
-// };

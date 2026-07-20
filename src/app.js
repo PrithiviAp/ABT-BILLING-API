@@ -18,13 +18,20 @@ import appRoutes from './app.routes.js';
 const app = express();
 
 app.use(helmet());
+// app.use(
+//   cors({
+//     origin: ENV.ALLOWED_ORIGIN,
+//     credentials: true,
+//   })
+// );
+
 app.use(
   cors({
-    origin: ENV.ALLOWED_ORIGIN,
+    // Dynamically allows any origin that makes a request
+    origin: (origin, callback) => callback(null, true), 
     credentials: true,
   })
 );
-
 app.use(mongoSanitize());
 app.use(compression());
 

@@ -1,255 +1,3 @@
-// import { AppError } from '../../utils/appError.js';
-// import { generateBillNumber } from '../../utils/billNumber.js';
-// import { Customer } from '../customer/customer.model.js';
-
-// import Bill from './bill.model.js';
-
-// export const createBill = async (data, userId) => {
-
-//   const billNo = await generateBillNumber();
-
-//   let subTotal = 0;
-//   let totalGst = 0;
-//   let calculatedGrandTotal = 0;
-
-//   const items = data.items.map((item) => {
-
-//     const taxable =
-//       +(item.rate * item.qty).toFixed(2);
-
-//     const gstAmt =
-//       +(taxable * item.gstPercent / 100).toFixed(2);
-
-//     const total =
-//       +(taxable + gstAmt).toFixed(2);
-
-//     subTotal += taxable;
-//     totalGst += gstAmt;
-//     calculatedGrandTotal += total;
-
-//     return {
-//       ...item,
-
-//       taxableAmount: taxable,
-
-//       gstAmount: gstAmt,
-
-//       total,
-//     };
-//   });
-
-//   // Final totals
-//   subTotal = +subTotal.toFixed(2);
-
-//   totalGst = +totalGst.toFixed(2);
-
-//   calculatedGrandTotal =
-//     +calculatedGrandTotal.toFixed(2);
-
-//   // Rounded final bill amount
-//   const grandTotal =
-//     Math.round(calculatedGrandTotal);
-
-//   // Round off difference
-//   const roundOff =
-//     +(grandTotal - calculatedGrandTotal).toFixed(2);
-
-//   // Payment
-//   const paidAmount =
-//     +parseFloat(data.paidAmount || 0).toFixed(2);
-
-//   if (paidAmount < 0) {
-//     throw new AppError(
-//       'Paid amount cannot be negative',
-//       400
-//     );
-//   }
-
-//   if (paidAmount > grandTotal) {
-//     throw new AppError(
-//       'Paid amount cannot exceed grand total',
-//       400
-//     );
-//   }
-
-//   const dueAmount =
-//     +(grandTotal - paidAmount).toFixed(2);
-
-//   // Status
-//   let status = 'partial';
-
-//   if (paidAmount <= 0) {
-//     status = 'unpaid';
-//   }
-//   else if (dueAmount <= 0) {
-//     status = 'paid';
-//   }
-
-
-// let customer = await Customer.findOne({
-//   phone: data.customerPhone,
-// });
-
-// if (!customer) {
-
-//   customer = await Customer.create({
-
-//     name: data.customerName,
-
-//     phone: data.customerPhone,
-
-//     totalSpent: grandTotal,
-
-//     totalBills: 1,
-
-//     lastPurchaseAt: new Date(),
-//   });
-
-// }
-// else {
-
-//   customer.name = data.customerName;
-
-//   customer.totalSpent += grandTotal;
-
-//   customer.totalBills += 1;
-
-//   customer.lastPurchaseAt = new Date();
-
-//   await customer.save();
-// }
-// return Bill.create({
-
-//   billNo,
-
-//   customer: customer._id,
-
-//   items,
-
-//   subTotal,
-
-//   totalGst,
-
-//   calculatedGrandTotal,
-
-//   roundOff,
-
-//   grandTotal,
-
-//   paidAmount,
-
-//   dueAmount,
-
-//   status,
-
-//   notes: data.notes || '',
-// });
-// };
-
-// export const payBill = async (billId, amount) => {
-
-//   const bill = await Bill.findById(billId);
-
-//   if (!bill) {
-//     throw new AppError('Bill not found', 404);
-//   }
-
-//   if (bill.status === 'cancelled') {
-//     throw new AppError(
-//       'Cancelled bill cannot be updated',
-//       400
-//     );
-//   }
-
-//   amount = +parseFloat(amount).toFixed(2);
-
-//   if (amount <= 0) {
-//     throw new AppError(
-//       'Invalid payment amount',
-//       400
-//     );
-//   }
-
-//   const updatedPaidAmount =
-//     +(bill.paidAmount + amount).toFixed(2);
-
-//   if (updatedPaidAmount > bill.grandTotal) {
-
-//     throw new AppError(
-//       'Paid amount cannot exceed grand total',
-//       400
-//     );
-//   }
-
-//   bill.paidAmount = updatedPaidAmount;
-
-//   bill.dueAmount = +(
-//     bill.grandTotal - bill.paidAmount
-//   ).toFixed(2);
-
-//   if (bill.dueAmount <= 0) {
-
-//     bill.status = 'paid';
-//   }
-//   else if (bill.paidAmount > 0) {
-
-//     bill.status = 'partial';
-//   }
-//   else {
-
-//     bill.status = 'unpaid';
-//   }
-
-//   await bill.save();
-
-//   return bill;
-// };
-
-// export const getAllBills = async ({ page = 1, limit = 20, search, status, from, to }) => {
-//   const query = {};
-
-//   if (status) query.status = status;
-
-//   if (search) {
-//     query.$or = [
-//       { billNo:       { $regex: search, $options: 'i' } },
-//       { customerName: { $regex: search, $options: 'i' } },
-//     ];
-//   }
-
-//   if (from || to) {
-//     query.createdAt = {};
-//     if (from) query.createdAt.$gte = new Date(from);
-//     if (to)   query.createdAt.$lte = new Date(new Date(to).setHours(23,59,59,999));
-//   }
-
-//   const skip  = (page - 1) * limit;
-//   const total = await Bill.countDocuments(query);
-//   const data  = await Bill.find(query)
-//     .sort({ createdAt: -1 })
-//     .skip(skip)
-//     .limit(+limit)
-//     .select('-items')          // list view — no items for performance
-//     .populate('customer', 'name phone')
-//     .populate('createdBy', 'name');
-
-//   return { data, pagination: { total, page: +page, limit: +limit, pages: Math.ceil(total / limit) } };
-// };
-
-// export const getBillById = async (id) => {
-//   const bill = await Bill.findById(id).populate('customer', 'name phone')
-//   .populate('createdBy', 'name');
-//   if (!bill) throw new AppError('Bill not found', 404);
-//   return bill;
-// };
-
-// export const cancelBill = async (id) => {
-//   const bill = await Bill.findByIdAndUpdate(
-//     id, { status: 'cancelled' }, { new: true }
-//   );
-//   if (!bill) throw new AppError('Bill not found', 404);
-//   return bill;
-// };
 import { AppError } from '../../utils/appError.js';
 import { generateBillNumber } from '../../utils/billNumber.js';
 import { Customer } from '../customer/customer.model.js';
@@ -289,17 +37,17 @@ export const createBill = async (data, userId) => {
   let totalGst = 0;
   let calculatedGrandTotal = 0;
 
-  const items = data.items.map((item) => {
-    const taxable = +(item.rate * item.qty).toFixed(2);
-    const gstAmt  = +(taxable * item.gstPercent / 100).toFixed(2);
-    const total   = +(taxable + gstAmt).toFixed(2);
+const items = data.items.map((item) => {
+  const total   = +(item.rate * item.qty).toFixed(2);              // rate = GST-inclusive selling price
+  const taxable = +(total / (1 + item.gstPercent / 100)).toFixed(2);
+  const gstAmt  = +(total - taxable).toFixed(2);
 
-    subTotal             += taxable;
-    totalGst             += gstAmt;
-    calculatedGrandTotal += total;
+  subTotal             += taxable;
+  totalGst             += gstAmt;
+  calculatedGrandTotal += total;
 
-    return { ...item, taxableAmount: taxable, gstAmount: gstAmt, total };
-  });
+  return { ...item, taxableAmount: taxable, gstAmount: gstAmt, total };
+});
 
   subTotal             = +subTotal.toFixed(2);
   totalGst             = +totalGst.toFixed(2);
@@ -439,12 +187,25 @@ export const getAllBills = async ({ page = 1, limit = 20, search, status, from, 
 
   if (status) query.status = status;
 
-  if (search) {
-    query.$or = [
-      { billNo:       { $regex: search, $options: 'i' } },
-      { customerName: { $regex: search, $options: 'i' } },
-    ];
-  }
+if (search) {
+  const matchingCustomers = await Customer.find({
+    $or: [
+      { name:  { $regex: search, $options: 'i' } },
+      { phone: { $regex: search, $options: 'i' } },
+    ]
+  }).select('_id');
+
+  const customerIds = matchingCustomers.map(c => c._id);
+
+  // Check if search looks like "walk-in" intent
+  const isWalkInSearch = 'walk-in customer'.includes(search.toLowerCase());
+
+  query.$or = [
+    { billNo:   { $regex: search, $options: 'i' } },
+    { customer: { $in: customerIds } },
+    ...(isWalkInSearch ? [{ customer: { $exists: false } }, { customer: null }] : []),
+  ];
+}
 
   if (from || to) {
     query.createdAt = {};

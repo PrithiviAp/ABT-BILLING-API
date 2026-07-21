@@ -33,10 +33,11 @@ export const createProduct = async (data) => {
 
   if (existing) {
     Object.assign(existing, {
-      unit:     data.unit,
-      rate:     data.rate,     // ← was missing
-      stock:    data.stock,    // ← was missing
-      isActive: true,
+      unit:         data.unit,
+      rate:         data.rate,
+      stock:        data.stock,
+      openingStock: data.stock,   // ← reset baseline to match new stock entry
+      isActive:     true,
       isGstApplicable,
       ...computed,
     });
@@ -48,6 +49,7 @@ export const createProduct = async (data) => {
     ...data,
     name,
     isGstApplicable,
+    openingStock: data.stock || 0,   // ← this line was missing entirely
     ...computed,
   });
 };
@@ -121,13 +123,19 @@ export const bulkCreateProducts = async (rows) => {
 
   if (!docs.length) return results;
 
-  const bulkOps = docs.map(doc => ({
+const bulkOps = docs.map(doc => {
+  const { stock, ...rest } = doc;
+  return {
     updateOne: {
       filter: { name: { $regex: `^${escapeRegex(doc.name)}$`, $options: 'i' } },
-      update: { $set: doc },
+      update: {
+        $set: { ...rest, stock },
+        $setOnInsert: { openingStock: stock },   // ← only set on first insert, never overwritten after
+      },
       upsert: true,
     },
-  }));
+  };
+});
 
   try {
     const res = await Product.bulkWrite(bulkOps, { ordered: false });
@@ -178,7 +186,7 @@ export const deleteProduct = async (id) => {
 export const updateStock = async (id, qty, operation = 'set') => {
   const ops = {
     set:       { $set: { stock: qty } },
-    increment: { $inc: { stock:  qty } },
+    increment: { $inc: { stock: qty, openingStock: qty } },   // restock raises the baseline too
     decrement: { $inc: { stock: -qty } },
   };
   const product = await Product.findByIdAndUpdate(id, ops[operation], { new: true });

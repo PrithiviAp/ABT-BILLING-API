@@ -74,7 +74,7 @@ export async function getPaymentModeBreakdown(req, res) {
 
 export async function getLowStock(req, res) {
   try {
-    const threshold = Number(req.query.threshold) || 10;
+    const threshold = Number(req.query.threshold) || 80;   // ← now a % sold threshold
     const { page, limit } = getPagination(req.query);
     const data = await reportsService.getLowStockProducts(threshold, page, limit);
     res.json({ threshold, ...data });

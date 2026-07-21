@@ -12,8 +12,22 @@ const productSchema = new mongoose.Schema({
   sellingAmountAll: { type: Number, required: true, min: 0 },  // user-entered (manual) or from sheet (bulk)
   sellingRate:      { type: Number, default: 0 },     // auto-calculated
   stock:            { type: Number, default: 0, min: 0 },
+  openingStock: { type: Number, default: 0, min: 0 },
   isActive:         { type: Boolean, default: true },
 }, { timestamps: true });
+
+productSchema.virtual('soldPercent').get(function () {
+  if (!this.openingStock) return 0;
+  return +(((this.openingStock - this.stock) / this.openingStock) * 100).toFixed(1);
+});
+
+productSchema.virtual('isLowStock').get(function () {
+  if (!this.openingStock) return false;
+  return this.stock <= this.openingStock * 0.2;
+});
+
+productSchema.set('toJSON', { virtuals: true });
+productSchema.set('toObject', { virtuals: true });
 
 productSchema.index({ isActive: 1 });
 productSchema.index({ name: 1 }, { unique: true });

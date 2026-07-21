@@ -35,17 +35,19 @@ export const getDashboardStats = async () => {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const weekStart = new Date(today.getTime() - 6 * DAY_MS); // last 7 days incl. today
 
-  const [
-    todayStats,
-    weeklyDailyAgg,
-    monthStats,
-    totalBills,
-    totalProducts,
-    inStockCount,
-    outOfStockCount,
-    recentBills,
-    topProducts,
-  ] = await Promise.all([
+ const [
+  todayStats,
+  weeklyDailyAgg,
+  monthStats,
+  totalBills,
+  totalProducts,
+  inStockCount,
+  outOfStockCount,
+  lowStockCount,
+  lowStockProducts,
+  recentBills,
+  topProducts,
+] = await Promise.all([
 
     // Today's revenue + bill count
     Bill.aggregate([
@@ -76,6 +78,28 @@ export const getDashboardStats = async () => {
     Product.countDocuments({ isActive: true }),
     Product.countDocuments({ isActive: true, stock: { $gt: 0 } }),
     Product.countDocuments({ isActive: true, stock: { $lte: 0 } }),
+
+      Product.countDocuments({
+    isActive: true,
+    openingStock: { $gt: 0 },
+    stock: { $gt: 0 },   // out-of-stock already covered by its own card
+    $expr: { $lte: ['$stock', { $multiply: ['$openingStock', 0.2] }] },
+  }),
+  Product.aggregate([
+    { $match: { isActive: true, openingStock: { $gt: 0 }, stock: { $gt: 0 } } },
+    { $addFields: {
+        soldPercent: {
+          $multiply: [
+            { $divide: [ { $subtract: ['$openingStock', '$stock'] }, '$openingStock' ] },
+            100,
+          ],
+        },
+    } },
+    { $match: { soldPercent: { $gte: 80 } } },
+    { $sort: { soldPercent: -1 } },
+    { $limit: 5 },
+    { $project: { name: 1, stock: 1, openingStock: 1, soldPercent: { $round: ['$soldPercent', 1] } } },
+  ]),
 
     // Last 5 bills — FIX: schema field is `customer` (ObjectId ref), not
     // `customerName`, so the old select() was pulling a field that doesn't
@@ -116,27 +140,19 @@ export const getDashboardStats = async () => {
   const weekRevenue = daily.reduce((sum, d) => sum + d.revenue, 0);
   const weekBills = daily.reduce((sum, d) => sum + d.bills, 0);
 
-  return {
-    today: {
-      revenue: todayStats[0]?.revenue || 0,
-      bills:   todayStats[0]?.count   || 0,
-    },
-    week: {
-      revenue: weekRevenue,
-      bills:   weekBills,
-      daily,
-    },
-    month: {
-      revenue: monthStats[0]?.revenue || 0,
-      bills:   monthStats[0]?.count   || 0,
-    },
-    totals: {
-      bills:      totalBills,
-      products:   totalProducts,
-      inStock:    inStockCount,
-      outOfStock: outOfStockCount,
-    },
-    recentBills,
-    topProducts,
-  };
+return {
+  today:  { revenue: todayStats[0]?.revenue || 0, bills: todayStats[0]?.count || 0 },
+  week:   { revenue: weekRevenue, bills: weekBills, daily },
+  month:  { revenue: monthStats[0]?.revenue || 0, bills: monthStats[0]?.count || 0 },
+  totals: {
+    bills:      totalBills,
+    products:   totalProducts,
+    inStock:    inStockCount,
+    outOfStock: outOfStockCount,
+    lowStock:   lowStockCount,   // ← new
+  },
+  lowStockProducts,               // ← new
+  recentBills,
+  topProducts,
+};
 };

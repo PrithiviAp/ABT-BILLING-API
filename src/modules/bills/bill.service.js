@@ -9,29 +9,24 @@ export const createBill = async (data, userId) => {
   const billNo = await generateBillNumber();
 
   // ── 1. Stock validation & deduction ──────────────────────────
-  for (const item of data.items) {
-    const product = await Product.findById(item.productId);
+for (const item of data.items) {
+  const product = await Product.findById(item.productId);
 
-    if (!product) {
-      throw new AppError(`Product "${item.productName}" not found`, 404);
-    }
-
-    if (product.stock < item.qty) {
-      throw new AppError(
-        `Insufficient stock for "${product.name}". Available: ${product.stock}, Requested: ${item.qty}`,
-        400
-      );
-    }
-
-    product.stock -= item.qty;
-
-    if (product.stock === 0) {
-      product.isActive = false;
-    }
-
-    await product.save();
+  if (!product) {
+    throw new AppError(`Product "${item.productName}" not found`, 404);
   }
 
+  if (product.stock < item.qty) {
+    throw new AppError(
+      `Insufficient stock for "${product.name}". Available: ${product.stock}, Requested: ${item.qty}`,
+      400
+    );
+  }
+
+  product.stock -= item.qty;
+  // ← removed: product.isActive = false when stock hits 0
+  await product.save();
+}
   // ── 2. Calculate totals (your existing logic) ─────────────────
   let subTotal = 0;
   let totalGst = 0;
@@ -136,14 +131,13 @@ export const cancelBill = async (id) => {
   }
 
   // ── Restore stock on cancel ───────────────────────────────────
-  for (const item of bill.items) {
-    const product = await Product.findById(item.productId);
-    if (product) {
-      product.stock    += item.qty;
-      product.isActive  = true;   // re-activate if it was marked out-of-stock
-      await product.save();
-    }
+for (const item of bill.items) {
+  const product = await Product.findById(item.productId);
+  if (product) {
+    product.stock += item.qty;
+    await product.save();
   }
+}
 
   bill.status = 'cancelled';
   await bill.save();

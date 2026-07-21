@@ -9,7 +9,6 @@ const router = Router();
 
 router.post('/register', validate([
   body('name').notEmpty().withMessage('Name is required'),
-  body('email').isEmail().withMessage('Valid email required'),
   body('mobile')
     .matches(/^\+91[6-9]\d{9}$/)
     .withMessage('Valid Indian mobile number required (+91 followed by 10 digits)'),
@@ -17,7 +16,9 @@ router.post('/register', validate([
 ]), register);
 
 router.post('/login', authLimiter, validate([
-  body('email').isEmail().withMessage('Valid email required'),
+  body('mobile')
+    .matches(/^\+91[6-9]\d{9}$/)
+    .withMessage('Valid Indian mobile number required'),
   body('password').notEmpty().withMessage('Password required'),
 ]), login);
 

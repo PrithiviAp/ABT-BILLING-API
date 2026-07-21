@@ -25,9 +25,7 @@ export async function getSalesData(period, from, to, page = 1, limit = 15) {
     'Bill No':      b.billNo,                                  // ← was b.billNumber
     'Date':         new Date(b.createdAt).toLocaleDateString('en-IN'),
     'Customer':     b.customer?.name || 'Walk-in',             // ← was b.customerName
-    'Items':        b.items?.length || 0,
-    'Sub Total':    b.subTotal,
-    'Discount':     b.roundOff || 0,                           // ← "Discount" no longer exists either, see note below
+    'Items':        b.items?.length || 0,                       // ← "Discount" no longer exists either, see note below
     'Grand Total':  b.grandTotal,
     'Status':       b.status,                                  // ← paymentMode doesn't exist; using status instead
   }));
@@ -156,25 +154,39 @@ export async function getPaymentModeBreakdown(period, page = 1, limit = 15) {
   };
 }
 
-export async function getLowStockProducts(threshold, page = 1, limit = 15) {
-  const filter = { isActive: true, stock: { $lte: threshold } };
+export async function getLowStockProducts(thresholdPercent = 80, page = 1, limit = 15) {
+  const filter = {
+    isActive: true,
+    openingStock: { $gt: 0 },
+    $expr: {
+      $gte: [
+        { $multiply: [
+            { $divide: [ { $subtract: ['$openingStock', '$stock'] }, '$openingStock' ] },
+            100,
+        ] },
+        thresholdPercent,
+      ],
+    },
+  };
   const skip = (page - 1) * limit;
 
   const [total, products] = await Promise.all([
     Product.countDocuments(filter),
-    Product.find(filter).sort({ stock: 1 }).skip(skip).limit(limit).lean()
+    Product.find(filter).sort({ stock: 1 }).skip(skip).limit(limit).lean(),
   ]);
 
   const rows = products.map(p => ({
-    'Name':     p.name,
-    'Unit':     p.unit,
-    'Stock':    p.stock,
-    'Rate (₹)': p.rate,
+    'Name':          p.name,
+    'Unit':          p.unit,
+    'Opening Stock': p.openingStock,
+    'Current Stock': p.stock,
+    'Sold %':        +(((p.openingStock - p.stock) / p.openingStock) * 100).toFixed(1),
+    'Rate (₹)':      p.rate,
   }));
 
   return {
     rows,
     pagination: { page, limit, total, pages: Math.ceil(total / limit) },
-    summary: { totalLowStockItems: total }
+    summary: { totalLowStockItems: total },
   };
 }

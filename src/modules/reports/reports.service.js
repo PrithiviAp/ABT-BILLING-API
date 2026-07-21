@@ -158,6 +158,7 @@ export async function getLowStockProducts(thresholdPercent = 80, page = 1, limit
   const filter = {
     isActive: true,
     openingStock: { $gt: 0 },
+    stock: { $gt: 0 },   // ← exclude fully out-of-stock; that's its own report now
     $expr: {
       $gte: [
         { $multiply: [
@@ -188,5 +189,29 @@ export async function getLowStockProducts(thresholdPercent = 80, page = 1, limit
     rows,
     pagination: { page, limit, total, pages: Math.ceil(total / limit) },
     summary: { totalLowStockItems: total },
+  };
+}
+
+export async function getOutOfStockProducts(page = 1, limit = 15) {
+  const filter = { isActive: true, stock: { $lte: 0 } };
+  const skip = (page - 1) * limit;
+
+  const [total, products] = await Promise.all([
+    Product.countDocuments(filter),
+    Product.find(filter).sort({ updatedAt: -1 }).skip(skip).limit(limit).lean(),
+  ]);
+
+  const rows = products.map(p => ({
+    'Name':          p.name,
+    'Unit':          p.unit,
+    'Opening Stock': p.openingStock,
+    'Rate (₹)':      p.rate,
+    'Last Updated':  new Date(p.updatedAt).toLocaleDateString('en-IN'),
+  }));
+
+  return {
+    rows,
+    pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+    summary: { totalOutOfStockItems: total },
   };
 }

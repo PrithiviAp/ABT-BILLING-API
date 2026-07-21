@@ -6,7 +6,8 @@ import {
   exportProductsReport,
   getTopProducts,
   getPaymentModeBreakdown,
-  getLowStock
+  getLowStock,
+  getOutOfStock
 } from './reports.controller.js';
 
 const router = express.Router();
@@ -18,5 +19,6 @@ router.get('/products/export', exportProductsReport);
 router.get('/top-products', getTopProducts);
 router.get('/payment-mode', getPaymentModeBreakdown);
 router.get('/low-stock', getLowStock);
+router.get('/out-of-stock', getOutOfStock);
 
 export default router;

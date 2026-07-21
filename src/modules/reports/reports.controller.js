@@ -83,3 +83,14 @@ export async function getLowStock(req, res) {
     res.status(500).json({ message: 'Failed to fetch low stock report' });
   }
 }
+
+export async function getOutOfStock(req, res) {
+  try {
+    const { page, limit } = getPagination(req.query);
+    const data = await reportsService.getOutOfStockProducts(page, limit);
+    res.json(data);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Failed to fetch out-of-stock report' });
+  }
+}

@@ -145,11 +145,11 @@ const preview = rows.map((row, idx) => {
 });
 
 export const confirmBulkUpload = asyncHandler(async (req, res) => {
-  const { rows } = req.body;
+  const { rows, override = true } = req.body;
   if (!Array.isArray(rows) || !rows.length)
     throw new AppError('No rows to import', 400);
 
-  const results = await productService.bulkCreateProducts(rows);
+  const results = await productService.bulkCreateProducts(rows, override);
   sendSuccess(res, results,
     `Import complete: ${results.created} created, ${results.updated} updated, ${results.skipped} skipped`
   );

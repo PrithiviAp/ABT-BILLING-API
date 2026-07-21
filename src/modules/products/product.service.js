@@ -64,45 +64,68 @@ export const updateProduct = async (id, data) => {
     data = { ...data, name };
   }
 
-// updateProduct — also add discPercent to the recompute trigger list
-const shouldRecompute = ['rate', 'stock', 'isGstApplicable', 'gstPercent', 'sellingRate', 'discPercent']
-  .some(f => data[f] !== undefined);
+  const shouldRecompute = ['rate', 'stock', 'isGstApplicable', 'gstPercent', 'sellingRate', 'discPercent']
+    .some(f => data[f] !== undefined);
 
-if (shouldRecompute) {
-  const current = await Product.findById(id);
-  if (!current) throw new AppError('Product not found', 404);
+  if (shouldRecompute) {
+    const current = await Product.findById(id);
+    if (!current) throw new AppError('Product not found', 404);
 
-  const isGstApplicable = data.isGstApplicable ?? current.isGstApplicable;
+    const isGstApplicable = data.isGstApplicable ?? current.isGstApplicable;
 
-  const computed = computeProductAmounts({
-    rate:             data.rate             ?? current.rate,
-    stock:            data.stock             ?? current.stock,
-    discPercent:      data.discPercent       ?? current.discPercent,
-    isGstApplicable,
-    gstPercent:       data.gstPercent        ?? current.gstPercent,
-    sellingRate:      data.sellingRate       ?? current.sellingRate,
-  });
+    const addQty = data.stock !== undefined ? (parseFloat(data.stock) || 0) : 0;
+    const newStock = current.stock + addQty;
 
-  data = { ...data, isGstApplicable, ...computed };
-}
+    // Baseline only resets when an actual restock happened; a no-op or
+    // unrelated field edit must never silently erase low-stock history.
+    const newOpeningStock = addQty > 0 ? newStock : current.openingStock;
+
+    const computed = computeProductAmounts({
+      rate:             data.rate        ?? current.rate,
+      stock:            newStock,
+      discPercent:      data.discPercent ?? current.discPercent,
+      isGstApplicable,
+      gstPercent:       data.gstPercent  ?? current.gstPercent,
+      sellingRate:      data.sellingRate ?? current.sellingRate,
+    });
+
+    data = {
+      ...data,
+      isGstApplicable,
+      stock: newStock,
+      openingStock: newOpeningStock,
+      ...(addQty > 0 && { isActive: true }),
+      ...computed,
+    };
+  }
 
   const product = await Product.findByIdAndUpdate(id, data, { new: true, runValidators: true });
   if (!product) throw new AppError('Product not found', 404);
   return product;
 };
 
-export const bulkCreateProducts = async (rows) => {
+export const bulkCreateProducts = async (rows, override = true) => {
   const results = { created: 0, updated: 0, skipped: 0, errors: [] };
 
-  const docs = rows
-    .map(({ _row, ...data }) => {
-      const isGstApplicable = data.isGstApplicable ?? (parseFloat(data.gstPercent) > 0);
-      const rate  = parseFloat(data.rate) || 0;
-      const stock = Math.round(parseFloat(data.stock) || 0);
+  const parsedRows = rows
+    .map(({ _row, ...data }) => ({
+      ...data,
+      name: String(data.name || '').trim().toUpperCase(),
+      rate: parseFloat(data.rate) || 0,
+      stock: Math.round(parseFloat(data.stock) || 0),
+    }))
+    .filter(d => d.name && d.rate > 0);
 
+  if (!parsedRows.length) return results;
+
+  // ── OVERRIDE ON: full replace, matching products get every field
+  // (including stock and openingStock) overwritten by the sheet ──
+  if (override) {
+    const docs = parsedRows.map(data => {
+      const isGstApplicable = data.isGstApplicable ?? (parseFloat(data.gstPercent) > 0);
       const computed = computeProductAmounts({
-        rate,
-        stock,
+        rate:             data.rate,
+        stock:            data.stock,
         discPercent:      parseFloat(data.discPercent) || 0,
         isGstApplicable,
         gstPercent:       parseFloat(data.gstPercent) || 18,
@@ -110,61 +133,206 @@ export const bulkCreateProducts = async (rows) => {
       });
 
       return {
-        name: String(data.name || '').trim().toUpperCase(),
-        unit: data.unit || 'Nos',
-        rate,
-        stock,
+        name:         data.name,
+        unit:         data.unit || 'Nos',
+        rate:         data.rate,
+        stock:        data.stock,
+        openingStock: data.stock,   // full override resets baseline too
         isGstApplicable,
-        isActive: true,
+        isActive:     true,
         ...computed,
       };
-    })
-    .filter(d => d.name && d.rate > 0);
+    });
 
-  if (!docs.length) return results;
-
-const bulkOps = docs.map(doc => {
-  const { stock, ...rest } = doc;
-  return {
-    updateOne: {
-      filter: { name: { $regex: `^${escapeRegex(doc.name)}$`, $options: 'i' } },
-      update: {
-        $set: { ...rest, stock },
-        $setOnInsert: { openingStock: stock },   // ← only set on first insert, never overwritten after
+    const bulkOps = docs.map(doc => ({
+      updateOne: {
+        filter: { name: { $regex: `^${escapeRegex(doc.name)}$`, $options: 'i' } },
+        update: { $set: doc },
+        upsert: true,
       },
-      upsert: true,
-    },
-  };
-});
+    }));
+
+    try {
+      const res = await Product.bulkWrite(bulkOps, { ordered: false });
+      results.created = res.upsertedCount ?? 0;
+      results.updated = res.modifiedCount ?? 0;
+    } catch (err) {
+      results.created = err.result?.upsertedCount ?? 0;
+      results.updated = err.result?.modifiedCount ?? 0;
+      (err.writeErrors || []).forEach(e => {
+        results.errors.push({ name: e.err?.op?.q?.name ?? '?', reason: e.errmsg || 'Update failed' });
+        results.skipped++;
+      });
+    }
+
+    return results;
+  }
+
+  // ── OVERRIDE OFF: existing products only get rate updated and stock
+  // topped up; GST/discount/sellingRate/unit stay exactly as they are.
+  // New products (no name match) are still inserted fresh from the sheet. ──
+  const existingDocs = await Product.find({
+    name: { $in: parsedRows.map(r => new RegExp(`^${escapeRegex(r.name)}$`, 'i')) },
+  });
+  const existingByName = new Map(existingDocs.map(p => [p.name.toUpperCase(), p]));
+
+  const bulkOps = parsedRows.map(data => {
+    const existing = existingByName.get(data.name);
+
+    if (existing) {
+      const newRate  = data.rate;
+      const newStock = existing.stock + data.stock;   // top-up, not replace
+
+      const computed = computeProductAmounts({
+        rate:             newRate,
+        stock:            newStock,
+        discPercent:      existing.discPercent,        // preserved
+        isGstApplicable:  existing.isGstApplicable,     // preserved
+        gstPercent:       existing.gstPercent,          // preserved
+        sellingRate:      existing.sellingRate,         // preserved
+      });
+
+      return {
+        updateOne: {
+          filter: { _id: existing._id },
+          update: {
+            $set: {
+              rate:         newRate,
+              stock:        newStock,
+              openingStock: newStock,   // restock resets baseline, same rule as manual edit
+              isActive:     true,
+              ...computed,
+            },
+          },
+        },
+      };
+    }
+
+    // No existing match — nothing to preserve, insert as a brand-new product
+    const isGstApplicable = data.isGstApplicable ?? (parseFloat(data.gstPercent) > 0);
+    const computed = computeProductAmounts({
+      rate:             data.rate,
+      stock:            data.stock,
+      discPercent:      parseFloat(data.discPercent) || 0,
+      isGstApplicable,
+      gstPercent:       parseFloat(data.gstPercent) || 18,
+      sellingRate:      parseFloat(data.sellingRate) || 0,
+    });
+
+    return {
+      insertOne: {
+        document: {
+          name:         data.name,
+          unit:         data.unit || 'Nos',
+          rate:         data.rate,
+          stock:        data.stock,
+          openingStock: data.stock,
+          isGstApplicable,
+          isActive:     true,
+          ...computed,
+        },
+      },
+    };
+  });
 
   try {
     const res = await Product.bulkWrite(bulkOps, { ordered: false });
-    results.created = res.upsertedCount ?? 0;
+    results.created = res.insertedCount ?? 0;
     results.updated = res.modifiedCount ?? 0;
   } catch (err) {
-    results.created = err.result?.upsertedCount ?? 0;
+    results.created = err.result?.insertedCount ?? 0;
     results.updated = err.result?.modifiedCount ?? 0;
     (err.writeErrors || []).forEach(e => {
-      results.errors.push({ name: e.err?.op?.q?.name ?? '?', reason: e.errmsg || 'Update failed' });
+      results.errors.push({ name: '?', reason: e.errmsg || 'Update failed' });
       results.skipped++;
     });
   }
 
   return results;
 };
+// export const bulkCreateProducts = async (rows) => {
+//   const results = { created: 0, updated: 0, skipped: 0, errors: [] };
+
+//   const docs = rows
+//     .map(({ _row, ...data }) => {
+//       const isGstApplicable = data.isGstApplicable ?? (parseFloat(data.gstPercent) > 0);
+//       const rate  = parseFloat(data.rate) || 0;
+//       const stock = Math.round(parseFloat(data.stock) || 0);
+
+//       const computed = computeProductAmounts({
+//         rate,
+//         stock,
+//         discPercent:      parseFloat(data.discPercent) || 0,
+//         isGstApplicable,
+//         gstPercent:       parseFloat(data.gstPercent) || 18,
+//         sellingRate:      parseFloat(data.sellingRate) || 0,
+//       });
+
+//       return {
+//         name: String(data.name || '').trim().toUpperCase(),
+//         unit: data.unit || 'Nos',
+//         rate,
+//         stock,
+//         isGstApplicable,
+//         isActive: true,
+//         ...computed,
+//       };
+//     })
+//     .filter(d => d.name && d.rate > 0);
+
+//   if (!docs.length) return results;
+
+// const bulkOps = docs.map(doc => {
+//   const { stock, ...rest } = doc;
+//   return {
+//     updateOne: {
+//       filter: { name: { $regex: `^${escapeRegex(doc.name)}$`, $options: 'i' } },
+//       update: {
+//         $set: { ...rest, stock },
+//         $setOnInsert: { openingStock: stock },   // ← only set on first insert, never overwritten after
+//       },
+//       upsert: true,
+//     },
+//   };
+// });
+
+//   try {
+//     const res = await Product.bulkWrite(bulkOps, { ordered: false });
+//     results.created = res.upsertedCount ?? 0;
+//     results.updated = res.modifiedCount ?? 0;
+//   } catch (err) {
+//     results.created = err.result?.upsertedCount ?? 0;
+//     results.updated = err.result?.modifiedCount ?? 0;
+//     (err.writeErrors || []).forEach(e => {
+//       results.errors.push({ name: e.err?.op?.q?.name ?? '?', reason: e.errmsg || 'Update failed' });
+//       results.skipped++;
+//     });
+//   }
+
+//   return results;
+// };
 
 // ── unchanged below ───────────────────────────────────────────
-export const getAllProducts = async ({ search, page = 1, limit = 10, active = 'true' }) => {
+export const getAllProducts = async ({ search, page = 1, limit = 10, active = 'true', stockStatus = 'all' }) => {
   const query = { isActive: active !== 'false' };
 
   if (search) {
-    query.$or = [{ name: { $regex: search, $options: 'i' } }];
+    query.$or = [{ name: { $regex: escapeRegex(search), $options: 'i' } }];
+  }
+
+  if (stockStatus === 'in-stock') {
+    query.stock = { $gt: 0 };
+  } else if (stockStatus === 'out-of-stock') {
+    query.stock = { $lte: 0 };
+  } else if (stockStatus === 'low-stock') {
+    query.openingStock = { $gt: 0 };
+    query.stock = { $gt: 0 };
+    query.$expr = { $lte: ['$stock', { $multiply: ['$openingStock', 0.2] }] };
   }
 
   const p     = Math.max(1, parseInt(page));
   const l     = Math.max(1, parseInt(limit));
   const skip  = (p - 1) * l;
-  console.log('paru query', query);
   const total = await Product.countDocuments(query);
   const data  = await Product.find(query).sort({ name: 1 }).skip(skip).limit(l);
 
@@ -184,12 +352,21 @@ export const deleteProduct = async (id) => {
 };
 
 export const updateStock = async (id, qty, operation = 'set') => {
-  const ops = {
-    set:       { $set: { stock: qty } },
-    increment: { $inc: { stock: qty, openingStock: qty } },   // restock raises the baseline too
-    decrement: { $inc: { stock: -qty } },
-  };
-  const product = await Product.findByIdAndUpdate(id, ops[operation], { new: true });
+  const product = await Product.findById(id);
   if (!product) throw new AppError('Product not found', 404);
+
+  if (operation === 'set') {
+    product.stock = qty;
+  } else if (operation === 'increment') {
+    product.stock += qty;
+    if (qty > 0) {
+      product.openingStock = product.stock;   // same reset-to-total rule as updateProduct
+      product.isActive = true;
+    }
+  } else {
+    product.stock -= qty;
+  }
+
+  await product.save();
   return product;
 };

@@ -35,6 +35,8 @@ export const getDashboardStats = async () => {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const weekStart = new Date(today.getTime() - 6 * DAY_MS); // last 7 days incl. today
 
+ 
+
  const [
   todayStats,
   weeklyDailyAgg,
@@ -45,46 +47,48 @@ export const getDashboardStats = async () => {
   outOfStockCount,
   lowStockCount,
   lowStockProducts,
+  outOfStockProducts,
   recentBills,
   topProducts,
 ] = await Promise.all([
 
-    // Today's revenue + bill count
-    Bill.aggregate([
-      { $match: { createdAt: { $gte: today }, status: 'paid' } },
-      { $group: { _id: null, revenue: { $sum: '$grandTotal' }, count: { $sum: 1 } } },
-    ]),
+  // Today's revenue + bill count
+  Bill.aggregate([
+    { $match: { createdAt: { $gte: today }, status: 'paid' } },
+    { $group: { _id: null, revenue: { $sum: '$grandTotal' }, count: { $sum: 1 } } },
+  ]),
 
-    // Daily revenue for the last 7 days (chart data)
-    Bill.aggregate([
-      { $match: { createdAt: { $gte: weekStart }, status: 'paid' } },
-      { $group: {
-          _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: BUSINESS_TZ } },
-          revenue: { $sum: '$grandTotal' },
-          count: { $sum: 1 },
-      }},
-    ]),
+  // Daily revenue for the last 7 days
+  Bill.aggregate([
+    { $match: { createdAt: { $gte: weekStart }, status: 'paid' } },
+    { $group: {
+        _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: BUSINESS_TZ } },
+        revenue: { $sum: '$grandTotal' },
+        count: { $sum: 1 },
+    }},
+  ]),
 
-    // This month's revenue
-    Bill.aggregate([
-      { $match: { createdAt: { $gte: monthStart }, status: 'paid' } },
-      { $group: { _id: null, revenue: { $sum: '$grandTotal' }, count: { $sum: 1 } } },
-    ]),
+  // This month's revenue
+  Bill.aggregate([
+    { $match: { createdAt: { $gte: monthStart }, status: 'paid' } },
+    { $group: { _id: null, revenue: { $sum: '$grandTotal' }, count: { $sum: 1 } } },
+  ]),
 
-    Bill.countDocuments({ status: { $ne: 'cancelled' } }),
+  Bill.countDocuments({ status: { $ne: 'cancelled' } }),
 
-    // Product counts — scoped to isActive:true, matching how the product
-    // list/soft-delete already works (deleted products flip isActive false).
-    Product.countDocuments({ isActive: true }),
-    Product.countDocuments({ isActive: true, stock: { $gt: 0 } }),
-    Product.countDocuments({ isActive: true, stock: { $lte: 0 } }),
+  Product.countDocuments({ isActive: true }),
+  Product.countDocuments({ isActive: true, stock: { $gt: 0 } }),
+  Product.countDocuments({ isActive: true, stock: { $lte: 0 } }),
 
-      Product.countDocuments({
+  // ── lowStockCount (number) ──────────────────────────────────
+  Product.countDocuments({
     isActive: true,
     openingStock: { $gt: 0 },
-    stock: { $gt: 0 },   // out-of-stock already covered by its own card
+    stock: { $gt: 0 },
     $expr: { $lte: ['$stock', { $multiply: ['$openingStock', 0.2] }] },
   }),
+
+  // ── lowStockProducts (array, has soldPercent) ───────────────
   Product.aggregate([
     { $match: { isActive: true, openingStock: { $gt: 0 }, stock: { $gt: 0 } } },
     { $addFields: {
@@ -101,30 +105,35 @@ export const getDashboardStats = async () => {
     { $project: { name: 1, stock: 1, openingStock: 1, soldPercent: { $round: ['$soldPercent', 1] } } },
   ]),
 
-    // Last 5 bills — FIX: schema field is `customer` (ObjectId ref), not
-    // `customerName`, so the old select() was pulling a field that doesn't
-    // exist and customer info never actually reached the dashboard.
-    Bill.find({ status: { $ne: 'cancelled' } })
-      .sort({ createdAt: -1 })
-      .limit(5)
-      .select('billNo customer grandTotal createdAt status')
-      .populate('customer', 'name phone'),
+  // ── outOfStockProducts (array, has updatedAt) ───────────────
+  Product.find({ isActive: true, stock: { $lte: 0 } })
+    .sort({ updatedAt: -1 })
+    .limit(5)
+    .select('name stock openingStock updatedAt')
+    .lean(),
 
-    // Top 5 selling products this month
-    Bill.aggregate([
-      { $match: { createdAt: { $gte: monthStart }, status: 'paid' } },
-      { $unwind: '$items' },
-      { $group: {
-          _id: '$items.productId',
-          name:     { $first: '$items.productName' },
-          totalQty: { $sum: '$items.qty' },
-          revenue:  { $sum: '$items.total' },
-      }},
-      { $sort: { totalQty: -1 } },
-      { $limit: 5 },
-    ]),
+  // Last 5 bills
+  Bill.find({ status: { $ne: 'cancelled' } })
+    .sort({ createdAt: -1 })
+    .limit(5)
+    .select('billNo customer grandTotal createdAt status')
+    .populate('customer', 'name phone'),
 
-  ]);
+  // Top 5 selling products this month
+  Bill.aggregate([
+    { $match: { createdAt: { $gte: monthStart }, status: 'paid' } },
+    { $unwind: '$items' },
+    { $group: {
+        _id: '$items.productId',
+        name:     { $first: '$items.productName' },
+        totalQty: { $sum: '$items.qty' },
+        revenue:  { $sum: '$items.total' },
+    }},
+    { $sort: { totalQty: -1 } },
+    { $limit: 5 },
+  ]),
+
+]);
 
   // Fill in every day of the last 7 days — including days with zero sales —
   // so the weekly chart always renders a full, evenly-spaced week.
@@ -152,6 +161,7 @@ return {
     lowStock:   lowStockCount,   // ← new
   },
   lowStockProducts,               // ← new
+  outOfStockProducts,
   recentBills,
   topProducts,
 };
